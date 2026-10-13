@@ -1,0 +1,760 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>本の管理サイト</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #f5f6fa;
+      color: #263244;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Noto Sans JP", sans-serif;
+      font-size: 15px;
+    }
+
+    header {
+      background: #4256a6;
+      color: white;
+      padding: 22px 16px;
+      text-align: center;
+    }
+
+    header h1 { margin: 0; font-size: 25px; }
+    header p { margin: 8px 0 0; font-size: 13px; }
+
+    main {
+      width: 100%;
+      max-width: 850px;
+      margin: auto;
+      padding: 16px;
+    }
+
+    .panel {
+      background: white;
+      padding: 18px;
+      margin-bottom: 16px;
+      border-radius: 14px;
+      box-shadow: 0 2px 8px #2632440d;
+    }
+
+    h2 { font-size: 19px; margin: 0 0 15px; }
+    h3 { font-size: 16px; margin: 0 0 12px; }
+
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    input, select, textarea, button {
+      font: inherit;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid #d4d9e3;
+      border-radius: 9px;
+      padding: 10px 12px;
+      background: white;
+      color: #263244;
+    }
+
+    textarea {
+      min-height: 70px;
+      resize: vertical;
+    }
+
+    button {
+      min-height: 42px;
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 9px;
+      background: #4256a6;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:disabled { opacity: .55; cursor: wait; }
+
+    button.secondary {
+      background: #e9edf8;
+      color: #34477f;
+    }
+
+    button.danger {
+      background: #fff0f0;
+      color: #b42332;
+    }
+
+    button.full { width: 100%; margin-top: 14px; }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .row > * { flex: 1; min-width: 0; }
+
+    .hidden { display: none !important; }
+
+    .muted { color: #697386; font-size: 13px; }
+    .message { margin-top: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+    .error { color: #b42332; }
+    .success { color: #167548; }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .tabs button {
+      background: #e5e8f0;
+      color: #344054;
+      min-height: 48px;
+    }
+
+    .tabs button.active {
+      background: #4256a6;
+      color: white;
+    }
+
+    .book {
+      border: 1px solid #e1e5ed;
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 10px;
+      background: #fff;
+    }
+
+    .book h3 { overflow-wrap: anywhere; line-height: 1.5; }
+    .book p { margin: 7px 0; line-height: 1.6; overflow-wrap: anywhere; }
+
+    .book-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .book-actions button { flex: 1; }
+
+    .count { font-size: 13px; color: #697386; margin-bottom: 8px; }
+    .empty { padding: 20px 4px; color: #697386; text-align: center; }
+
+    .search-mode {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .search-mode button {
+      background: #e9edf8;
+      color: #34477f;
+    }
+
+    .search-mode button.active {
+      background: #4256a6;
+      color: white;
+    }
+
+    .divider {
+      border: 0;
+      border-top: 1px solid #e8ebf1;
+      margin: 16px 0;
+    }
+
+    @media (min-width: 650px) {
+      main { padding: 24px; }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 14px;
+      }
+      .form-grid .wide { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <h1>📚 本の管理サイト</h1>
+  <p>持ってる本も、これから欲しい本もまとめて管理</p>
+</header>
+
+<main>
+  <!-- ログイン -->
+  <section id="authPanel" class="panel">
+    <h2>ログイン・新規登録</h2>
+    <p class="muted">
+      自分の本を保存するためにアカウントを作成してね。
+    </p>
+
+    <form id="authForm">
+      <label for="email">メールアドレス</label>
+      <input id="email" type="email" autocomplete="email"
+        placeholder="メールアドレス" required>
+
+      <label for="password">パスワード</label>
+      <input id="password" type="password"
+        autocomplete="current-password" minlength="6"
+        placeholder="6文字以上" required>
+
+      <div class="row" style="margin-top:14px">
+        <button type="submit" id="loginBtn">ログイン</button>
+        <button type="button" class="secondary" id="signupBtn">
+          新規登録
+        </button>
+      </div>
+    </form>
+    <p id="authMessage" class="message" aria-live="polite"></p>
+  </section>
+
+  <!-- メイン画面 -->
+  <div id="app" class="hidden">
+    <section class="panel">
+      <div class="row" style="align-items:center">
+        <div>
+          <h2 style="margin-bottom:4px">マイページ</h2>
+          <p id="userEmail" class="muted" style="margin:0"></p>
+        </div>
+        <button id="logoutBtn" class="secondary">ログアウト</button>
+      </div>
+    </section>
+
+    <div class="tabs">
+      <button id="ownedTab" class="active">📚 持ってる本</button>
+      <button id="wishlistTab">⭐ 欲しい本</button>
+    </div>
+
+    <!-- 登録・編集 -->
+    <section class="panel" id="formPanel">
+      <h2 id="formTitle">本を登録する</h2>
+      <p class="muted">
+        項目を入力して保存してね。持ってる巻は「1-5」や「1,3,5」のように入力できるよ。
+      </p>
+
+      <form id="bookForm">
+        <div class="form-grid">
+          <div class="wide">
+            <label for="title">本の題名 *</label>
+            <input id="title" maxlength="200" required
+              placeholder="本の題名">
+          </div>
+
+          <div>
+            <label for="author">作者</label>
+            <input id="author" maxlength="200" placeholder="作者名">
+          </div>
+
+          <div>
+            <label for="publisher">出版社</label>
+            <input id="publisher" maxlength="200" placeholder="出版社名">
+          </div>
+
+          <div>
+            <label for="genre">ジャンル</label>
+            <input id="genre" maxlength="100"
+              list="genreOptions" placeholder="ジャンルを入力">
+            <datalist id="genreOptions">
+              <option value="漫画">
+              <option value="小説">
+              <option value="ライトノベル">
+              <option value="参考書">
+              <option value="その他">
+            </datalist>
+          </div>
+
+          <div>
+            <label for="volumes">持ってる巻</label>
+            <input id="volumes" maxlength="300"
+              placeholder="例：1-5、1,3,5">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:16px">
+          <button type="submit" id="saveBtn">本を登録する</button>
+          <button type="button" id="cancelEditBtn"
+            class="secondary hidden">編集をやめる</button>
+        </div>
+        <p id="formMessage" class="message" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <!-- 検索 -->
+    <section class="panel">
+      <h2>本を検索する</h2>
+
+      <label for="searchField">検索する項目</label>
+      <select id="searchField">
+        <option value="title">本の題名</option>
+        <option value="author">作者</option>
+        <option value="publisher">出版社</option>
+        <option value="genre">ジャンル</option>
+        <option value="volumes">持ってる巻</option>
+      </select>
+
+      <div class="search-mode" style="margin-top:12px">
+        <button type="button" id="manualMode" class="active">
+          手入力で検索
+        </button>
+        <button type="button" id="selectMode">
+          登録済みから選ぶ
+        </button>
+      </div>
+
+      <div id="manualSearch">
+        <label for="searchText">検索キーワード</label>
+        <input id="searchText" placeholder="キーワードを入力">
+      </div>
+
+      <div id="selectSearch" class="hidden">
+        <label for="searchValue">登録済みの候補</label>
+        <select id="searchValue">
+          <option value="">候補を選択</option>
+        </select>
+      </div>
+
+      <button id="clearSearchBtn" class="secondary full" type="button">
+        検索をクリア
+      </button>
+      <p class="muted">
+        検索は現在選んでいる一覧に対して行うよ。
+      </p>
+    </section>
+
+    <!-- 一覧 -->
+    <section class="panel">
+      <h2 id="listTitle">持ってる本の一覧</h2>
+      <div id="bookCount" class="count"></div>
+      <div id="bookList" aria-live="polite"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+  // =============================================
+  // Supabaseの接続情報を入力してね
+  // =============================================
+  const SUPABASE_URL = "ここにProject_URLを貼り付け";
+  const SUPABASE_KEY = "ここにPublishable_keyを貼り付け";
+
+  let db = null;
+  let currentUser = null;
+  let books = [];
+  let currentList = "owned";
+  let editingId = null;
+  let searchMode = "manual";
+
+  const $ = (id) => document.getElementById(id);
+
+  function showMessage(id, message, type = "") {
+    const el = $(id);
+    el.textContent = message;
+    el.className = "message " + type;
+  }
+
+  function setBusy(button, busy, busyText) {
+    if (busy) {
+      button.dataset.originalText = button.textContent;
+      button.textContent = busyText;
+      button.disabled = true;
+    } else {
+      button.textContent = button.dataset.originalText || button.textContent;
+      button.disabled = false;
+    }
+  }
+
+  function showApp(user) {
+    currentUser = user;
+    $("authPanel").classList.toggle("hidden", !!user);
+    $("app").classList.toggle("hidden", !user);
+
+    if (user) {
+      $("userEmail").textContent = user.email || "";
+      loadBooks();
+    } else {
+      books = [];
+      renderBooks();
+    }
+  }
+
+  function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    })[char]);
+  }
+
+  async function loadBooks() {
+    if (!db || !currentUser) return;
+
+    $("bookList").innerHTML = '<p class="empty">読み込み中...</p>';
+
+    const { data, error } = await db
+      .from("books")
+      .select("*")
+      .eq("user_id", currentUser.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      $("bookList").innerHTML = "";
+      showMessage("formMessage",
+        "読み込みに失敗しました：" + error.message, "error");
+      return;
+    }
+
+    books = data || [];
+    updateSearchOptions();
+    renderBooks();
+  }
+
+  function getFilteredBooks() {
+    const field = $("searchField").value;
+    let query = "";
+
+    if (searchMode === "manual") {
+      query = $("searchText").value.trim().toLocaleLowerCase();
+    } else {
+      query = $("searchValue").value.toLocaleLowerCase();
+    }
+
+    return books.filter((book) => {
+      if (book.list_type !== currentList) return false;
+      if (!query) return true;
+
+      const value = String(book[field] ?? "").toLocaleLowerCase();
+
+      if (searchMode === "manual") {
+        return value.includes(query);
+      }
+      return value === query;
+    });
+  }
+
+  function renderBooks() {
+    const list = getFilteredBooks();
+
+    $("listTitle").textContent =
+      currentList === "owned" ? "持ってる本の一覧" : "欲しい本の一覧";
+
+    $("bookCount").textContent = list.length + " 冊";
+
+    if (list.length === 0) {
+      $("bookList").innerHTML =
+        '<p class="empty">本がありません。登録するか、検索条件を変えてね。</p>';
+      return;
+    }
+
+    $("bookList").innerHTML = list.map((book) => `
+      <article class="book">
+        <h3>${escapeHTML(book.title)}</h3>
+        <p><strong>作者：</strong>${escapeHTML(book.author || "未入力")}</p>
+        <p><strong>出版社：</strong>${escapeHTML(book.publisher || "未入力")}</p>
+        <p><strong>ジャンル：</strong>${escapeHTML(book.genre || "未入力")}</p>
+        <p><strong>持ってる巻：</strong>${escapeHTML(book.volumes || "未入力")}</p>
+        <div class="book-actions">
+          <button type="button" class="secondary"
+            data-action="edit" data-id="${book.id}">編集</button>
+          <button type="button" class="danger"
+            data-action="delete" data-id="${book.id}">削除</button>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  function updateSearchOptions() {
+    const field = $("searchField").value;
+    const previous = $("searchValue").value;
+
+    const values = [...new Set(
+      books
+        .filter((book) => book.list_type === currentList)
+        .map((book) => String(book[field] ?? "").trim())
+        .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b, "ja"));
+
+    $("searchValue").innerHTML =
+      '<option value="">候補を選択</option>' +
+      values.map((value) =>
+        `<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`
+      ).join("");
+
+    if (values.includes(previous)) {
+      $("searchValue").value = previous;
+    }
+  }
+
+  function clearForm() {
+    editingId = null;
+    $("bookForm").reset();
+    $("formTitle").textContent = "本を登録する";
+    $("saveBtn").textContent = "本を登録する";
+    $("cancelEditBtn").classList.add("hidden");
+    showMessage("formMessage", "");
+  }
+
+  function startEdit(id) {
+    const book = books.find((item) => String(item.id) === String(id));
+    if (!book) return;
+
+    editingId = book.id;
+    $("title").value = book.title || "";
+    $("author").value = book.author || "";
+    $("publisher").value = book.publisher || "";
+    $("genre").value = book.genre || "";
+    $("volumes").value = book.volumes || "";
+
+    $("formTitle").textContent = "本を編集する";
+    $("saveBtn").textContent = "変更を保存する";
+    $("cancelEditBtn").classList.remove("hidden");
+    showMessage("formMessage", "編集内容を入力して保存してね。", "success");
+
+    $("formPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("title").focus();
+  }
+
+  async function deleteBook(id) {
+    const book = books.find((item) => String(item.id) === String(id));
+    if (!book) return;
+
+    if (!confirm("「" + book.title + "」を削除してもいい？")) return;
+
+    const { error } = await db
+      .from("books")
+      .delete()
+      .eq("id", book.id)
+      .eq("user_id", currentUser.id);
+
+    if (error) {
+      alert("削除に失敗しました：" + error.message);
+      return;
+    }
+
+    if (String(editingId) === String(id)) clearForm();
+    await loadBooks();
+  }
+
+  $("bookForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!db || !currentUser) return;
+
+    const saveBtn = $("saveBtn");
+    setBusy(saveBtn, true, "保存中...");
+
+    const record = {
+      user_id: currentUser.id,
+      list_type: currentList,
+      title: $("title").value.trim(),
+      author: $("author").value.trim(),
+      publisher: $("publisher").value.trim(),
+      genre: $("genre").value.trim(),
+      volumes: $("volumes").value.trim(),
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      let result;
+
+      if (editingId !== null) {
+        result = await db
+          .from("books")
+          .update(record)
+          .eq("id", editingId)
+          .eq("user_id", currentUser.id);
+      } else {
+        result = await db.from("books").insert(record);
+      }
+
+      if (result.error) {
+        showMessage("formMessage",
+          "保存に失敗しました：" + result.error.message, "error");
+        return;
+      }
+
+      clearForm();
+      showMessage("formMessage", "保存できたよ！", "success");
+      await loadBooks();
+    } catch (error) {
+      showMessage("formMessage",
+        "エラー：" + error.message, "error");
+    } finally {
+      setBusy(saveBtn, false);
+    }
+  });
+
+  $("cancelEditBtn").addEventListener("click", clearForm);
+
+  $("bookList").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+
+    const id = button.dataset.id;
+    if (button.dataset.action === "edit") startEdit(id);
+    if (button.dataset.action === "delete") deleteBook(id);
+  });
+
+  function changeList(type) {
+    currentList = type;
+
+    $("ownedTab").classList.toggle("active", type === "owned");
+    $("wishlistTab").classList.toggle("active", type === "wishlist");
+
+    clearForm();
+    updateSearchOptions();
+    renderBooks();
+  }
+
+  $("ownedTab").addEventListener("click", () => changeList("owned"));
+  $("wishlistTab").addEventListener("click", () => changeList("wishlist"));
+
+  function changeSearchMode(mode) {
+    searchMode = mode;
+
+    $("manualMode").classList.toggle("active", mode === "manual");
+    $("selectMode").classList.toggle("active", mode === "select");
+    $("manualSearch").classList.toggle("hidden", mode !== "manual");
+    $("selectSearch").classList.toggle("hidden", mode !== "select");
+
+    renderBooks();
+  }
+
+  $("manualMode").addEventListener("click", () => changeSearchMode("manual"));
+  $("selectMode").addEventListener("click", () => changeSearchMode("select"));
+
+  $("searchField").addEventListener("change", () => {
+    updateSearchOptions();
+    renderBooks();
+  });
+
+  $("searchText").addEventListener("input", renderBooks);
+  $("searchValue").addEventListener("change", renderBooks);
+
+  $("clearSearchBtn").addEventListener("click", () => {
+    $("searchText").value = "";
+    $("searchValue").value = "";
+    renderBooks();
+  });
+
+  $("authForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!db) return;
+
+    const btn = $("loginBtn");
+    setBusy(btn, true, "ログイン中...");
+    showMessage("authMessage", "");
+
+    try {
+      const { data, error } = await db.auth.signInWithPassword({
+        email: $("email").value.trim(),
+        password: $("password").value
+      });
+
+      if (error) {
+        showMessage("authMessage",
+          "ログインできませんでした：" + error.message, "error");
+      } else {
+        showMessage("authMessage", "ログインしました。", "success");
+        showApp(data.user);
+      }
+    } catch (error) {
+      showMessage("authMessage", error.message, "error");
+    } finally {
+      setBusy(btn, false);
+    }
+  });
+
+  $("signupBtn").addEventListener("click", async () => {
+    if (!db) return;
+
+    const email = $("email").value.trim();
+    const password = $("password").value;
+
+    if (!email || password.length < 6) {
+      showMessage("authMessage",
+        "メールアドレスと6文字以上のパスワードを入力してね。", "error");
+      return;
+    }
+
+    const btn = $("signupBtn");
+    setBusy(btn, true, "登録中...");
+    showMessage("authMessage", "");
+
+    try {
+      const { data, error } = await db.auth.signUp({ email, password });
+
+      if (error) {
+        showMessage("authMessage",
+          "登録に失敗しました：" + error.message, "error");
+      } else if (data.session) {
+        showMessage("authMessage", "登録できたよ！", "success");
+        showApp(data.user);
+      } else {
+        showMessage("authMessage",
+          "登録リクエストを受け付けたよ。メールに確認リンクが届いていたら、開いてからログインしてね。",
+          "success");
+      }
+    } catch (error) {
+      showMessage("authMessage", "エラー：" + error.message, "error");
+    } finally {
+      setBusy(btn, false);
+    }
+  });
+
+  $("logoutBtn").addEventListener("click", async () => {
+    if (!db) return;
+    const { error } = await db.auth.signOut();
+    if (error) {
+      alert("ログアウトに失敗しました：" + error.message);
+    } else {
+      showApp(null);
+    }
+  });
+
+  async function initialize() {
+    if (
+      SUPABASE_URL.includes("https://kypgdxhjijxzsoxljoxp.supabase.co") ||
+      SUPABASE_KEY.includes("sb_publishable_4PzNNkI5q3gjEvLku0YVOw_7HakseLf")
+    ) {
+      showMessage("authMessage",
+        "先にコード内のProject URLとPublishable keyを設定してね。", "error");
+      return;
+    }
+
+    try {
+      db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      const { data, error } = await db.auth.getSession();
+      if (error) throw error;
+
+      showApp(data.session ? data.session.user : null);
+
+      db.auth.onAuthStateChange((_event, session) => {
+        showApp(session ? session.user : null);
+      });
+    } catch (error) {
+      showMessage("authMessage",
+        "初期化に失敗しました：" + error.message, "error");
+    }
+  }
+
+  initialize();
+</script>
+</body>
+</html>
